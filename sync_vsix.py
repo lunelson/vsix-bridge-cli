@@ -17,6 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Tuple, TypedDict
 
+import argparse
 import semantic_version
 
 import local_marketplace
@@ -27,23 +28,39 @@ import local_marketplace
 
 
 # Configure one entry per logical marketplace you want to serve.
+# Keys correspond to IDE/fork names (e.g. "cursor", "agy").
 # "engine" should be the VS Code engine version of that client
-# (e.g. the core version used by Antigravity or Cursor).
+# (the core version used by that fork).
 # "directory" is the folder passed to coder/code-marketplace's --directory.
 class MarketConfig(TypedDict):
     engine: str
     directory: Path
 
 
+# Per-IDE/fork engine versions. Adjust these if Cursor/Antigravity update
+# their underlying VS Code core versions.
+MARKET_ENGINES: Dict[str, str] = {
+    "cursor": "1.99.3",  # Cursor VS Code engine
+    "agy": "1.104.0",  # Google Antigravity VS Code engine
+}
+
+
+# Consistent ports for each marketplace, for convenience when starting
+# coder/code-marketplace. You can change these if the defaults conflict.
+MARKET_PORTS: Dict[str, int] = {
+    "cursor": 8080,
+    "agy": 8081,
+}
+
+
+# Derived market configuration: one VSIX directory per IDE, named
+# "vsix-{market_name}" (e.g. vsix-cursor, vsix-agy).
 MARKETS: Dict[str, MarketConfig] = {
-    "legacy": {
-        "engine": "1.89.0",  # cursor: 1.99.3
-        "directory": Path("vsix-legacy"),
-    },
-    "modern": {
-        "engine": "1.93.0",  # agy: 1.104.0
-        "directory": Path("vsix-modern"),
-    },
+    name: {
+        "engine": engine,
+        "directory": Path(f"vsix-{name}"),
+    }
+    for name, engine in MARKET_ENGINES.items()
 }
 
 # Optional: hard-code extension IDs here. If left empty, we derive
@@ -64,13 +81,24 @@ def get_extensions_to_sync() -> List[str]:
     return sorted({e["id"].lower() for e in installed})
 
 
-def get_target_engines() -> Dict[str, semantic_version.Version]:
+def get_target_engines(
+    markets: List[str] | None = None,
+) -> Dict[str, semantic_version.Version]:
+    """Return target engine versions for the selected markets.
+
+    If *markets* is None, all configured markets are used.
+    """
+
     engines: Dict[str, semantic_version.Version] = {}
-    for market, cfg in MARKETS.items():
-        raw = cfg.get("engine")
-        if not isinstance(raw, str):
-            raise ValueError(f"Missing engine version for market '{market}'")
+    if markets is None:
+        items = MARKETS.items()
+    else:
+        items = ((m, MARKETS[m]) for m in markets)
+
+    for market, cfg in items:
+        raw = cfg["engine"]
         engines[market] = semantic_version.Version(raw)
+
     return engines
 
 
@@ -149,19 +177,32 @@ def find_compatible_versions_for_extension(
     return per_market, metadata
 
 
-def sync_markets() -> None:
-    target_engines = get_target_engines()
+def sync_markets(selected_markets: List[str] | None = None) -> List[str]:
+    """Sync VSIX files for the selected markets.
+
+    Returns the list of markets that were actually synced.
+    """
+
+    if selected_markets:
+        markets = selected_markets
+    else:
+        markets = list(MARKETS.keys())
+
+    target_engines = get_target_engines(markets)
     market_dirs: Dict[str, Path] = {}
     expected_files: Dict[str, set[str]] = {}
 
-    for market, cfg in MARKETS.items():
+    for market in markets:
+        cfg = MARKETS[market]
         path = cfg["directory"]
         path.mkdir(parents=True, exist_ok=True)
         market_dirs[market] = path
         expected_files[market] = set()
 
     exts = get_extensions_to_sync()
-    print(f"Syncing {len(exts)} extensions across {len(MARKETS)} markets...")
+    print(
+        f"Syncing {len(exts)} extensions across {len(markets)} markets: {', '.join(markets)}"
+    )
 
     for ext_id in exts:
         print(f"== {ext_id} ==")
@@ -182,10 +223,62 @@ def sync_markets() -> None:
                 vsix_path.unlink()
 
     print("Sync complete.")
+    return markets
 
 
-def main() -> None:
-    sync_markets()
+def print_code_marketplace_commands(markets: List[str]) -> None:
+    """Print suggested `code-marketplace` commands for the given markets."""
+
+    print("\nSuggested code-marketplace commands:")
+    for market in markets:
+        port = MARKET_PORTS.get(market)
+        directory = MARKETS[market]["directory"]
+        if port is None:
+            print(
+                f"# {market}: no port configured in MARKET_PORTS; "
+                "set one if you want a stable assignment."
+            )
+            continue
+        print(f"code-marketplace --directory {directory} --listen 127.0.0.1:{port}")
+
+
+def main(argv: List[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Sync VSIX files for one or more VS Code fork marketplaces "
+            "(e.g. cursor, agy)."
+        )
+    )
+    parser.add_argument(
+        "-m",
+        "--market",
+        action="append",
+        choices=sorted(MARKET_ENGINES.keys()) + ["all"],
+        help=(
+            "Market(s) to sync. Can be passed multiple times. "
+            "Defaults to all configured markets."
+        ),
+    )
+    parser.add_argument(
+        "--print-commands",
+        action="store_true",
+        help=(
+            "After syncing, print suggested `code-marketplace` commands "
+            "for the selected markets."
+        ),
+    )
+
+    args = parser.parse_args(argv)
+
+    if not args.market or "all" in args.market:
+        markets = list(MARKET_ENGINES.keys())
+    else:
+        markets = args.market
+
+    synced_markets = sync_markets(markets)
+
+    if args.print_commands:
+        print_code_marketplace_commands(synced_markets)
 
 
 if __name__ == "__main__":
