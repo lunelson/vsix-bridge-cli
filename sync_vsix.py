@@ -15,12 +15,14 @@ via the VS Code / Cursor CLI. You can also hard-code EXTENSIONS below.
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import subprocess
+import sys
+import urllib.request
 from typing import Dict, List, Tuple, TypedDict
 
 import argparse
 import semantic_version
-
-import local_marketplace
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -72,12 +74,99 @@ MS_VSIX_BASE = (
     "https://marketplace.visualstudio.com/_apis/public/gallery/"
     "publishers/{publisher}/vsextensions/{name}/{version}/vspackage"
 )
+MS_MARKETPLACE_API = (
+    "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery"
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers (inlined; formerly in local_marketplace.py)
+# ---------------------------------------------------------------------------
+
+
+def get_installed_extensions() -> List[Dict[str, str]]:
+    """List installed extensions via code/cursor CLI."""
+
+    def run_cli(cmd: List[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+    candidates = [["code"], ["cursor"]]
+    last_err: Exception | None = None
+    for base in candidates:
+        try:
+            result = run_cli(base + ["--list-extensions", "--show-versions"])
+            exts: List[Dict[str, str]] = []
+            for line in result.stdout.strip().splitlines():
+                if "@" not in line:
+                    continue
+                ext_id, version = line.split("@", 1)
+                exts.append({"id": ext_id.lower(), "version": version})
+            return exts
+        except FileNotFoundError as exc:
+            last_err = exc
+            continue
+        except subprocess.CalledProcessError as exc:
+            last_err = exc
+            continue
+    print(f"[ERROR] Could not list extensions via code/cursor CLI: {last_err}")
+    sys.exit(1)
+
+
+def fetch_extension_metadata_ms(ext_id: str) -> Dict | None:
+    """Fetch extension metadata from the Microsoft marketplace."""
+
+    payload = {
+        "filters": [
+            {
+                "criteria": [{"filterType": 7, "value": ext_id}],
+                "pageNumber": 1,
+                "pageSize": 1,
+                "sortBy": 0,
+                "sortOrder": 0,
+            }
+        ],
+        "assetTypes": [],
+        # Include versions + files + version properties + asset URI + installation targets
+        "flags": 0x1 | 0x2 | 0x10 | 0x200 | 0x80,
+    }
+
+    req = urllib.request.Request(
+        MS_MARKETPLACE_API,
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json;api-version=3.0-preview.1",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode())
+        results = data.get("results", [])
+        if results and results[0].get("extensions"):
+            return results[0]["extensions"][0]
+    except Exception as exc:
+        print(f"[WARN] {ext_id}: fetch failed: {exc}")
+    return None
+
+
+def download_vsix(url: str, dest_path: Path) -> None:
+    """Download a VSIX file if not already present."""
+
+    if dest_path.exists():
+        print(f"  VSIX already exists: {dest_path}")
+        return
+    try:
+        with urllib.request.urlopen(url) as resp, open(dest_path, "wb") as out:
+            out.write(resp.read())
+        print(f"  Downloaded {dest_path.name}")
+    except Exception as exc:
+        print(f"  Failed to download VSIX {url}: {exc}")
 
 
 def get_extensions_to_sync() -> List[str]:
     if EXTENSIONS:
         return sorted({e.lower() for e in EXTENSIONS})
-    installed = local_marketplace.get_installed_extensions()
+    installed = get_installed_extensions()
     return sorted({e["id"].lower() for e in installed})
 
 
@@ -125,7 +214,7 @@ def find_compatible_versions_for_extension(
 
     result: {market_name: (version_str, vsix_url)}
     """
-    metadata = local_marketplace.fetch_extension_metadata_ms(ext_id)
+    metadata = fetch_extension_metadata_ms(ext_id)
     if not metadata:
         print(f"[WARN] {ext_id}: not found in MS Marketplace")
         return {}, {}
@@ -212,7 +301,7 @@ def sync_markets(selected_markets: List[str] | None = None) -> List[str]:
             filename = f"{ext_id}-{ver_str}.vsix"
             dest_path = dest_dir / filename
             expected_files[market].add(filename)
-            local_marketplace.download_vsix(url, dest_path)
+            download_vsix(url, dest_path)
 
     # Cleanup: remove any VSIX files that are no longer desired in each market
     for market, dir_path in market_dirs.items():
