@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Engine-aware VSIX sync script for coder/code-marketplace.
+"""Engine-aware VSIX sync script for VS Code forks.
 
 This script:
 - Figures out which extension versions are compatible with one or more
   VS Code engine versions (e.g. Cursor vs Antigravity).
-- Downloads those VSIX files into per-market folders for coder/code-marketplace.
+- Downloads those VSIX files into per-IDE directories (e.g. vsix-cursor, vsix-agy).
 - Deletes any VSIX files in those folders that are no longer the desired
-  version for any configured market.
+  version for any configured IDE.
 
 By default, the extension list is derived from your installed extensions
-via the VS Code / Cursor CLI. You can also hard-code EXTENSIONS below.
+via the VS Code CLI. You can also hard-code EXTENSIONS below.
 """
 
 from __future__ import annotations
@@ -29,11 +29,11 @@ import semantic_version
 # ---------------------------------------------------------------------------
 
 
-# Configure one entry per logical marketplace you want to serve.
+# Configure one entry per IDE/fork you want to sync extensions for.
 # Keys correspond to IDE/fork names (e.g. "cursor", "agy").
 # "engine" should be the VS Code engine version of that client
 # (the core version used by that fork).
-# "directory" is the folder passed to coder/code-marketplace's --directory.
+# "directory" is the local directory where VSIX files are stored for that IDE.
 class MarketConfig(TypedDict):
     engine: str
     directory: Path
@@ -42,16 +42,8 @@ class MarketConfig(TypedDict):
 # Per-IDE/fork engine versions. Adjust these if Cursor/Antigravity update
 # their underlying VS Code core versions.
 MARKET_ENGINES: Dict[str, str] = {
-    "cursor": "1.99.3",  # Cursor VS Code engine
+    "cursor": "1.105.1",  # Cursor VS Code engine
     "agy": "1.104.0",  # Google Antigravity VS Code engine
-}
-
-
-# Consistent ports for each marketplace, for convenience when starting
-# coder/code-marketplace. You can change these if the defaults conflict.
-MARKET_PORTS: Dict[str, int] = {
-    "cursor": 8080,
-    "agy": 8081,
 }
 
 
@@ -85,31 +77,26 @@ MS_MARKETPLACE_API = (
 
 
 def get_installed_extensions() -> List[Dict[str, str]]:
-    """List installed extensions via code/cursor CLI."""
+    """List installed extensions via VS Code CLI."""
 
     def run_cli(cmd: List[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-    candidates = [["code"], ["cursor"]]
-    last_err: Exception | None = None
-    for base in candidates:
-        try:
-            result = run_cli(base + ["--list-extensions", "--show-versions"])
-            exts: List[Dict[str, str]] = []
-            for line in result.stdout.strip().splitlines():
-                if "@" not in line:
-                    continue
-                ext_id, version = line.split("@", 1)
-                exts.append({"id": ext_id.lower(), "version": version})
-            return exts
-        except FileNotFoundError as exc:
-            last_err = exc
-            continue
-        except subprocess.CalledProcessError as exc:
-            last_err = exc
-            continue
-    print(f"[ERROR] Could not list extensions via code/cursor CLI: {last_err}")
-    sys.exit(1)
+    try:
+        result = run_cli(["code", "--list-extensions", "--show-versions"])
+        exts: List[Dict[str, str]] = []
+        for line in result.stdout.strip().splitlines():
+            if "@" not in line:
+                continue
+            ext_id, version = line.split("@", 1)
+            exts.append({"id": ext_id.lower(), "version": version})
+        return exts
+    except FileNotFoundError as exc:
+        print(f"[ERROR] Could not list extensions via code CLI: {exc}")
+        sys.exit(1)
+    except subprocess.CalledProcessError as exc:
+        print(f"[ERROR] Could not list extensions via code CLI: {exc}")
+        sys.exit(1)
 
 
 def fetch_extension_metadata_ms(ext_id: str) -> Dict | None:
@@ -315,26 +302,10 @@ def sync_markets(selected_markets: List[str] | None = None) -> List[str]:
     return markets
 
 
-def print_code_marketplace_commands(markets: List[str]) -> None:
-    """Print suggested `code-marketplace` commands for the given markets."""
-
-    print("\nSuggested code-marketplace commands:")
-    for market in markets:
-        port = MARKET_PORTS.get(market)
-        directory = MARKETS[market]["directory"]
-        if port is None:
-            print(
-                f"# {market}: no port configured in MARKET_PORTS; "
-                "set one if you want a stable assignment."
-            )
-            continue
-        print(f"code-marketplace --directory {directory} --listen 127.0.0.1:{port}")
-
-
 def main(argv: List[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Sync VSIX files for one or more VS Code fork marketplaces "
+            "Sync VSIX files for one or more VS Code forks "
             "(e.g. cursor, agy)."
         )
     )
@@ -344,16 +315,8 @@ def main(argv: List[str] | None = None) -> None:
         action="append",
         choices=sorted(MARKET_ENGINES.keys()) + ["all"],
         help=(
-            "Market(s) to sync. Can be passed multiple times. "
-            "Defaults to all configured markets."
-        ),
-    )
-    parser.add_argument(
-        "--print-commands",
-        action="store_true",
-        help=(
-            "After syncing, print suggested `code-marketplace` commands "
-            "for the selected markets."
+            "IDE(s) to sync. Can be passed multiple times. "
+            "Defaults to all configured IDEs."
         ),
     )
 
@@ -364,10 +327,7 @@ def main(argv: List[str] | None = None) -> None:
     else:
         markets = args.market
 
-    synced_markets = sync_markets(markets)
-
-    if args.print_commands:
-        print_code_marketplace_commands(synced_markets)
+    sync_markets(markets)
 
 
 if __name__ == "__main__":

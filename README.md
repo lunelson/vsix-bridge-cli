@@ -6,7 +6,7 @@ Keep a local mirror of your VS Code extensions and bulk-install them into VS Cod
 
 -   **Sync based on VS Code**: `sync_vsix.py` downloads VSIX files from the Microsoft VS Code Marketplace based on your currently installed extensions in `code` (or a hard-coded list); save them as `.vsix` files in a sibling directory post-fixed by IDE name (e.g. `vsix-cursor`, `vsix-agy`), taking the newest engine-compatible version for each.
 -   **Bulk install**: `bulk_install_vsix.py` installs only missing or older versions into an IDE via its CLI (with `--force`/`--update-only` controls).
--   **Private**: Everything stays local; set your IDE’s marketplace URL to `http://0.0.0.0/` to avoid remote galleries.
+-   **Private**: Everything stays local; VSIX files are installed directly via IDE CLIs.
 
 ## Prerequisites
 
@@ -31,20 +31,20 @@ source .venv/bin/activate
 
 By default `sync_vsix.py` knows about two IDEs:
 
--   `cursor` (VS Code engine `1.99.3`)
+-   `cursor` (VS Code engine `1.105.1`)
 -   `agy` (Google Antigravity, engine `1.104.0`)
 
 Run:
 
 ```bash
-uv run sync_vsix.py --print-commands
+uv run sync_vsix.py
 ```
 
 Limit to specific IDEs:
 
 ```bash
-uv run sync_vsix.py -m cursor --print-commands
-uv run sync_vsix.py -m agy    --print-commands
+uv run sync_vsix.py -m cursor
+uv run sync_vsix.py -m agy
 ```
 
 This will download compatible VSIX files into `vsix-<market>` and remove stale ones.

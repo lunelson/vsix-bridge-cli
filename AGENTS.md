@@ -8,7 +8,7 @@
 
 ## Build, Test, and Development Commands
 - `uv sync` sets up the virtual environment and installs dependencies.
-- `uv run sync_vsix.py --print-commands [-m cursor|agy]` previews download actions; drop `--print-commands` to perform the sync.
+- `uv run sync_vsix.py [-m cursor|agy]` syncs VSIX files for the specified IDE(s), or all configured IDEs if none specified.
 - `uv run bulk_install_vsix.py -m cursor --dry-run` shows planned installs for a market; remove `--dry-run` to apply, and add `--force` or `--update-only` as needed.
 - `uv run sync_vsix.py -m cursor -m agy` refreshes both markets after adjusting engines or extension lists.
 
@@ -19,7 +19,7 @@
 - No formatter is pinned; follow PEP 8 and mirror the existing docstring/comment tone.
 
 ## Testing Guidelines
-- No automated tests yet; validate logic with `uv run sync_vsix.py --print-commands` to confirm selection and `uv run bulk_install_vsix.py --dry-run` to inspect planned installs.
+- No automated tests yet; validate logic by running `uv run sync_vsix.py` to confirm selection and `uv run bulk_install_vsix.py --dry-run` to inspect planned installs.
 - When adjusting version selection or marketplace handling, manually review resulting filenames in `vsix-<market>` to ensure expected versions.
 - If adding new parsing or selection code, consider lightweight `pytest` coverage with small fixtures to keep behavior deterministic.
 
