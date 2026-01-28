@@ -250,46 +250,47 @@ Accept: application/json;api-version=3.0-preview.1
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure
-- [ ] Project setup (package.json, tsconfig, tsup)
-- [ ] XDG storage utilities
-- [ ] IDE registry with macOS detection
-- [ ] CLI skeleton with @clack/prompts
+### Phase 1: Core Infrastructure ✅
+- [x] Project setup (package.json, tsconfig, tsup)
+- [x] XDG storage utilities
+- [x] IDE registry with macOS detection
+- [x] CLI skeleton with @clack/prompts
 
-### Phase 2: Sync Command
-- [ ] VS Code extension listing
-- [ ] Microsoft Marketplace API client
-- [ ] Semver compatibility matching
-- [ ] VSIX download with progress
-- [ ] Stale file cleanup
+### Phase 2: Sync Command ✅
+- [x] VS Code extension listing
+- [x] Microsoft Marketplace API client
+- [x] Semver compatibility matching
+- [x] VSIX download with progress
+- [x] Stale file cleanup
 
-### Phase 3: Install Command
-- [ ] Fork IDE extension listing
-- [ ] Install plan generation
-- [ ] CLI-based installation
-- [ ] Dry-run mode
+### Phase 3: Install Command ✅
+- [x] Fork IDE extension listing
+- [x] Install plan generation
+- [x] CLI-based installation
+- [x] Dry-run mode
 
-### Phase 4: State Sync
-- [ ] Disabled extension detection (VS Code)
-- [ ] Settings.json manipulation (forks)
-- [ ] `--sync-disabled` flag
+### Phase 4: State Sync ✅
+- [x] Disabled extension detection (VS Code)
+- [x] Settings.json manipulation (forks)
+- [x] `--sync-disabled` flag
 
-### Phase 5: Polish
-- [ ] `status` command
-- [ ] `detect` command
-- [ ] Error handling and retry logic
-- [ ] Progress UI with @clack/prompts
+### Phase 5: Polish ✅
+- [x] `status` command
+- [x] `detect` command
+- [x] Progress UI with @clack/prompts
+- [ ] Retry logic with backoff (deferred)
+- [ ] Parallel VSIX downloads (deferred)
 
 ---
 
-## Files to Retire
+## Files Retired ✅
 
-After implementation:
-- `sync_vsix.py` — Replaced by `vsix-bridge sync`
-- `bulk_install_vsix.py` — Replaced by `vsix-bridge install`
-- `SPEC.md` — Superseded by this plan
-- `FUTURE.md` — Incorporated into IDE registry
-- `vsix-cursor/`, `vsix-agy/` — Replaced by `~/.cache/vsix-bridge/`
+- ~~`sync_vsix.py`~~ — Replaced by `vsix-bridge sync`
+- ~~`bulk_install_vsix.py`~~ — Replaced by `vsix-bridge install`
+- ~~`SPEC.md`~~ — Superseded by this plan
+- ~~`FUTURE.md`~~ — Incorporated into IDE registry
+- ~~`vsix-cursor/`, `vsix-agy/`~~ — Replaced by `~/.cache/vsix-bridge/`
+- ~~`pyproject.toml`, `.python-version`, `uv.lock`~~ — No longer Python
 
 ---
 
