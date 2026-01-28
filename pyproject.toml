@@ -1,7 +1,0 @@
-[project]
-name = "vsix-bridge"
-version = "0.1.0"
-description = "Keep a local mirror of your VS Code extensions and bulk-install them into VS Code forks (Cursor, Antigravity, etc.)."
-readme = "README.md"
-requires-python = ">=3.14"
-dependencies = ["semantic-version>=2.10.0"]
